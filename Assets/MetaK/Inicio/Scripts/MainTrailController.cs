@@ -1,44 +1,103 @@
 using UnityEngine;
-using System.Collections;
 
-public class MainTrailController : MonoBehaviour
+public class MainTrailPath : MonoBehaviour
 {
-    [Header("Estela Principal")]
-    public GameObject trailMain;
-
     [Header("Configuración")]
-    public float length = 22f;
-    public float moveTime = 6f;
-
-    private Vector3 origin;
-
+    public GameObject trailObject;
+    public float pathLength = 50f;
+    public float speed = 3f;
+    
+    [Header("Movimiento Espectacular")]
+    public float spiralAmplitude = 3f;      // Amplitud de la espiral
+    public float spiralFrequency = 4f;       // Vueltas de la espiral
+    public float verticalWave = 2f;          // Movimiento vertical
+    public float twistIntensity = 1.5f;      // Intensidad del giro
+    
+    private Vector3 startPosition;
+    private Vector3[] pathPoints;
+    private int currentPointIndex = 0;
+    private TrailRenderer trailRenderer;
+    
     void Start()
     {
-        origin = transform.position;
-        StartCoroutine(LoopMainTrail());
-    }
-
-    IEnumerator LoopMainTrail()
-    {
-        while (true)
+        if (trailObject == null)
         {
-            Vector3[] path = new Vector3[]
-            {
-                origin,
-                origin + transform.forward * (length * 0.3f),
-                origin + transform.forward * (length * 0.6f) + transform.up * 0.1f,
-                origin + transform.forward * length
-            };
-
-            iTween.MoveTo(trailMain, iTween.Hash(
-                "path", path,
-                "time", moveTime,
-                "easetype", iTween.EaseType.easeInOutSine,
-                "looptype", iTween.LoopType.none
-            ));
-
-            yield return new WaitForSeconds(moveTime + 0.2f);
-            trailMain.transform.position = origin;
+            Debug.LogError("Trail Object no asignado!");
+            return;
         }
+        
+        startPosition = trailObject.transform.position;
+        trailRenderer = trailObject.GetComponent<TrailRenderer>();
+        
+        GeneratePath();
+        MoveToNextPoint();
+    }
+    
+    void GeneratePath()
+    {
+        int pointCount = 25;
+        pathPoints = new Vector3[pointCount];
+        
+        for (int i = 0; i < pointCount; i++)
+        {
+            float progress = (float)i / (pointCount - 1);
+            float z = startPosition.z + (pathLength * progress);
+            
+            // Espiral con amplitud creciente
+            float angle = progress * Mathf.PI * 2 * spiralFrequency;
+            float currentAmplitude = spiralAmplitude * Mathf.Sin(progress * Mathf.PI);
+            
+            float x = startPosition.x + Mathf.Cos(angle) * currentAmplitude * twistIntensity;
+            
+            // Movimiento vertical ondulante
+            float y = startPosition.y + Mathf.Sin(progress * Mathf.PI * 2) * verticalWave;
+            
+            pathPoints[i] = new Vector3(x, y, z);
+        }
+    }
+    
+    void MoveToNextPoint()
+    {
+        if (currentPointIndex >= pathPoints.Length)
+        {
+            // Ocultar el trail antes de reiniciar
+            if (trailRenderer != null)
+            {
+                trailRenderer.Clear();
+                trailRenderer.enabled = false;
+            }
+            
+            // Reiniciar posición instantáneamente
+            trailObject.transform.position = startPosition;
+            currentPointIndex = 0;
+            
+            // Reactivar el trail
+            if (trailRenderer != null)
+            {
+                trailRenderer.enabled = true;
+            }
+            
+            MoveToNextPoint();
+            return;
+        }
+        
+        Vector3 targetPoint = pathPoints[currentPointIndex];
+        float distance = Vector3.Distance(trailObject.transform.position, targetPoint);
+        float duration = distance / speed;
+        
+        iTween.MoveTo(trailObject, iTween.Hash(
+            "position", targetPoint,
+            "time", duration,
+            "easetype", iTween.EaseType.linear,
+            "oncomplete", "OnPointReached",
+            "oncompletetarget", gameObject
+        ));
+        
+        currentPointIndex++;
+    }
+    
+    void OnPointReached()
+    {
+        MoveToNextPoint();
     }
 }
