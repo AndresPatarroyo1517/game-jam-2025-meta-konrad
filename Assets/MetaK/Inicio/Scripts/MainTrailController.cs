@@ -8,12 +8,13 @@ public class MainTrailPath : MonoBehaviour
     public float speed = 3f;
     
     [Header("Movimiento Espectacular")]
-    public float spiralAmplitude = 3f;      // Amplitud de la espiral
-    public float spiralFrequency = 4f;       // Vueltas de la espiral
-    public float verticalWave = 2f;          // Movimiento vertical
-    public float twistIntensity = 1.5f;      // Intensidad del giro
+    public float spiralAmplitude = 3f;
+    public float spiralFrequency = 4f;
+    public float verticalWave = 2f;
+    public float twistIntensity = 1.5f;
     
     private Vector3 startPosition;
+    private Quaternion startRotation;
     private Vector3[] pathPoints;
     private int currentPointIndex = 0;
     private TrailRenderer trailRenderer;
@@ -27,6 +28,7 @@ public class MainTrailPath : MonoBehaviour
         }
         
         startPosition = trailObject.transform.position;
+        startRotation = trailObject.transform.rotation;
         trailRenderer = trailObject.GetComponent<TrailRenderer>();
         
         GeneratePath();
@@ -41,18 +43,23 @@ public class MainTrailPath : MonoBehaviour
         for (int i = 0; i < pointCount; i++)
         {
             float progress = (float)i / (pointCount - 1);
-            float z = startPosition.z + (pathLength * progress);
+            
+            // Crea puntos en ESPACIO LOCAL (como si mirara hacia adelante en Z)
+            float localZ = pathLength * progress;
             
             // Espiral con amplitud creciente
             float angle = progress * Mathf.PI * 2 * spiralFrequency;
             float currentAmplitude = spiralAmplitude * Mathf.Sin(progress * Mathf.PI);
             
-            float x = startPosition.x + Mathf.Cos(angle) * currentAmplitude * twistIntensity;
+            float localX = Mathf.Cos(angle) * currentAmplitude * twistIntensity;
             
             // Movimiento vertical ondulante
-            float y = startPosition.y + Mathf.Sin(progress * Mathf.PI * 2) * verticalWave;
+            float localY = Mathf.Sin(progress * Mathf.PI * 2) * verticalWave;
             
-            pathPoints[i] = new Vector3(x, y, z);
+            Vector3 localPoint = new Vector3(localX, localY, localZ);
+            
+            // CONVIERTE de espacio local a espacio mundial usando la rotación inicial
+            pathPoints[i] = startPosition + startRotation * localPoint;
         }
     }
     
@@ -67,8 +74,9 @@ public class MainTrailPath : MonoBehaviour
                 trailRenderer.enabled = false;
             }
             
-            // Reiniciar posición instantáneamente
+            // Reiniciar posición y rotación instantáneamente
             trailObject.transform.position = startPosition;
+            trailObject.transform.rotation = startRotation;
             currentPointIndex = 0;
             
             // Reactivar el trail
@@ -99,5 +107,15 @@ public class MainTrailPath : MonoBehaviour
     void OnPointReached()
     {
         MoveToNextPoint();
+    }
+    
+    // Método para regenerar el path si cambias la rotación en el editor
+    void OnValidate()
+    {
+        if (Application.isPlaying && trailObject != null)
+        {
+            startRotation = trailObject.transform.rotation;
+            GeneratePath();
+        }
     }
 }
